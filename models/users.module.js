@@ -8,7 +8,6 @@ const userSchema = new mongoose.Schema({
     mobile_no: {
         type: String,
         required: true,
-        unique: true,
         match: [/^[0-9]{10}$/, 'Please provide a valid 10-digit mobile number'],
     },
     total_no_of_persons: {
