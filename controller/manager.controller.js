@@ -268,7 +268,6 @@ export const loginManager = async (req, res) => {
   }
 };
 
-
 export const getTicketQRCode = async (req, res) => {
   try {
     const { ticket_id } = req.params;
@@ -319,6 +318,162 @@ export const checkToken = async (req, res) => {
       res,
       statusCode: 500,
       message: "Token check failed",
+      error: error.message,
+    });
+  }
+};
+
+// API 1: Verify/Scan Ticket - Get User Data (Read Only)
+export const verifyTicket = async (req, res) => {
+  try {
+    const { ticket_id } = req.body;
+
+    // Validation
+    if (!ticket_id) {
+      return sendResponse({
+        res,
+        statusCode: 400,
+        error: "Ticket ID is required",
+      });
+    }
+
+    // Find ticket by ticket_id
+    const ticket = await ticketModel.findOne({ ticket_id });
+
+    if (!ticket) {
+      return sendResponse({
+        res,
+        statusCode: 404,
+        error: "❌ Ticket not found",
+      });
+    }
+
+    // Check if ticket is already consumed
+    if (ticket.ticket_status === "consumed") {
+      return sendResponse({
+        res,
+        statusCode: 400,
+        error: "❌ Ticket already consumed. Entry not allowed.",
+      });
+    }
+
+    // Check if ticket is cancelled
+    if (ticket.ticket_status === "cancelled") {
+      return sendResponse({
+        res,
+        statusCode: 400,
+        error: "❌ Ticket has been cancelled.",
+      });
+    }
+
+    // Check if payment is completed
+    if (ticket.payment_status !== "completed") {
+      return sendResponse({
+        res,
+        statusCode: 400,
+        error: "❌ Payment not completed. Entry not allowed.",
+      });
+    }
+
+    // Get user details
+    const user = await userModel.findById(ticket.user_id);
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      message: "✓ Ticket Verified - Proceed to Confirm",
+      data: {
+        user: {
+          name: user.name,
+          mobile_no: user.mobile_no,
+          total_persons: user.total_no_of_persons,
+          age: user.age,
+        },
+        ticket: {
+          ticket_id: ticket.ticket_id,
+          visit_date: formatDate(ticket.visit_date),
+          payment_mode: ticket.payment_mode,
+          amount: ticket.amount,
+          ticket_status: ticket.ticket_status,
+        },
+      },
+    });
+  } catch (error) {
+    sendResponse({
+      res,
+      statusCode: 500,
+      message: "Failed to verify ticket",
+      error: error.message,
+    });
+  }
+};
+
+// API 2: Confirm Entry - Update Ticket Status (Write Only)
+export const confirmAndConsumeTicket = async (req, res) => {
+  try {
+    const { ticket_id } = req.body;
+    const managerId = req.manager._id;
+
+    // Validation
+    if (!ticket_id) {
+      return sendResponse({
+        res,
+        statusCode: 400,
+        error: "Ticket ID is required",
+      });
+    }
+
+    // Find ticket by ticket_id
+    const ticket = await ticketModel.findOne({ ticket_id });
+
+    if (!ticket) {
+      return sendResponse({
+        res,
+        statusCode: 404,
+        error: "❌ Ticket not found",
+      });
+    }
+
+    // Double check if already consumed
+    if (ticket.ticket_status === "consumed") {
+      return sendResponse({
+        res,
+        statusCode: 400,
+        error: "❌ Ticket already consumed. Entry not allowed.",
+      });
+    }
+
+    // Update ticket status to consumed
+    ticket.ticket_status = "consumed";
+    ticket.entry_scanned_at = new Date();
+    ticket.scanned_by = managerId;
+    await ticket.save();
+
+    // Get user details for confirmation
+    const user = await userModel.findById(ticket.user_id);
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      message: "✅ Entry Confirmed - Ticket Consumed",
+      data: {
+        user: {
+          name: user.name,
+          mobile_no: user.mobile_no,
+          total_persons: user.total_no_of_persons,
+        },
+        ticket: {
+          ticket_id: ticket.ticket_id,
+          ticket_status: ticket.ticket_status,
+          entry_scanned_at: ticket.entry_scanned_at,
+        },
+      },
+    });
+  } catch (error) {
+    sendResponse({
+      res,
+      statusCode: 500,
+      message: "Failed to confirm entry",
       error: error.message,
     });
   }
