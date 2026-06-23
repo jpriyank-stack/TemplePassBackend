@@ -8,6 +8,7 @@ import {
   verifyTicket,
   confirmAndConsumeTicket,
   getDashboardStats,
+  getPassHistory,
 } from "../controller/manager.controller.js";
 
 import { protectManager } from "../middlewares/managerAuth.js";
@@ -22,5 +23,7 @@ router.get("/ticket/qrcode/:ticket_id", protectManager, getTicketQRCode);
 router.post('/verify-ticket', protectManager, verifyTicket);
 router.post('/confirm-entry', protectManager, confirmAndConsumeTicket);
 router.get('/dashboard-stats', protectManager, getDashboardStats);
+router.get('/pass-history', protectManager, getPassHistory);
+
 
 export default router;

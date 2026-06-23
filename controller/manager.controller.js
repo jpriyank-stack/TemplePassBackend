@@ -573,3 +573,67 @@ export const getDashboardStats = async (req, res) => {
     });
   }
 };
+
+export const getPassHistory = async (req, res) => {
+  try {
+    const managerId = req.manager._id;
+    
+    // Get today's date range using dayjs
+    const today = dayjs().startOf('day').toDate();
+    const tomorrow = dayjs().add(1, 'day').startOf('day').toDate();
+
+    // Get all tickets created by this manager today with populated references
+    const tickets = await ticketModel
+      .find({
+        manager_id: managerId,
+        createdAt: { $gte: today, $lt: tomorrow },
+      })
+      .populate('user_id', 'name mobile_no total_no_of_persons')
+      .populate('scanned_by', 'name email')
+      .sort({ createdAt: -1 });
+
+    // Format the data
+    const passHistory = tickets.map((ticket) => ({
+      ticket_id: ticket.ticket_id,
+      user_name: ticket.user_id.name,
+      mobile_no: ticket.user_id.mobile_no,
+      total_persons: ticket.user_id.total_no_of_persons,
+      amount: ticket.amount,
+      payment_mode: ticket.payment_mode,
+      ticket_status: ticket.ticket_status,
+      created_at: dayjs(ticket.createdAt).format('DD MMM YYYY HH:mm:ss'),
+      entry_scanned_at: ticket.entry_scanned_at
+        ? dayjs(ticket.entry_scanned_at).format('DD MMM YYYY HH:mm:ss')
+        : null,
+      scanned_by: ticket.scanned_by ? ticket.scanned_by.name : null,
+    }));
+
+    // Calculate summary
+    const summary = {
+      total_passes_created: tickets.length,
+      total_consumed: tickets.filter((t) => t.ticket_status === 'consumed').length,
+      total_pending: tickets.filter((t) => t.ticket_status === 'booked').length,
+      total_cancelled: tickets.filter((t) => t.ticket_status === 'cancelled').length,
+      total_revenue: tickets
+        .filter((t) => t.payment_status === 'completed')
+        .reduce((sum, ticket) => sum + ticket.amount, 0),
+    };
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      message: 'Pass history retrieved successfully',
+      data: {
+        summary,
+        passes: passHistory,
+      },
+    });
+  } catch (error) {
+    sendResponse({
+      res,
+      statusCode: 500,
+      message: 'Failed to fetch pass history',
+      error: error.message,
+    });
+  }
+};
