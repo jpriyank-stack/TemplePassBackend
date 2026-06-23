@@ -165,7 +165,7 @@ export const generateTicket = async (req, res) => {
       manager_id: managerId,
       visit_date,
       payment_mode,
-      payment_status: payment_mode === "cash" ? "completed" : "pending",
+      payment_status: "completed",
       amount,
       ticket_status: "booked",
     });
@@ -505,25 +505,25 @@ export const getDashboardStats = async (req, res) => {
       (t) => t.ticket_status === "cancelled"
     ).length;
 
-    // Calculate revenue (only from completed payments)
+    // Separate cash and online tickets (COUNT ALL regardless of payment_status)
+    const cashTickets = todayTickets.filter((t) => t.payment_mode === "cash");
+    const onlineTickets = todayTickets.filter((t) => t.payment_mode === "online");
+
+    // Calculate total revenue (only from completed payments)
     const totalRevenue = todayTickets
       .filter((t) => t.payment_status === "completed")
       .reduce((sum, ticket) => sum + ticket.amount, 0);
 
-    // Calculate cash and online breakdown
-    const cashTickets = todayTickets.filter(
-      (t) => t.payment_mode === "cash" && t.payment_status === "completed"
-    ).length;
-    const onlineTickets = todayTickets.filter(
-      (t) => t.payment_mode === "online" && t.payment_status === "completed"
-    ).length;
-
-    // Calculate revenue breakdown
-    const cashRevenue = todayTickets
-      .filter((t) => t.payment_mode === "cash" && t.payment_status === "completed")
+    // Calculate cash breakdown (count all, revenue only completed)
+    const cashCount = cashTickets.length;
+    const cashRevenue = cashTickets
+      .filter((t) => t.payment_status === "completed")
       .reduce((sum, ticket) => sum + ticket.amount, 0);
-    const onlineRevenue = todayTickets
-      .filter((t) => t.payment_mode === "online" && t.payment_status === "completed")
+
+    // Calculate online breakdown (count all, revenue only completed)
+    const onlineCount = onlineTickets.length;
+    const onlineRevenue = onlineTickets
+      .filter((t) => t.payment_status === "completed")
       .reduce((sum, ticket) => sum + ticket.amount, 0);
 
     // Get current date and time using dayjs
@@ -548,11 +548,11 @@ export const getDashboardStats = async (req, res) => {
         },
         paymentBreakdown: {
           cash: {
-            tickets: cashTickets,
+            tickets: cashCount,
             revenue: cashRevenue,
           },
           online: {
-            tickets: onlineTickets,
+            tickets: onlineCount,
             revenue: onlineRevenue,
           },
         },
@@ -572,7 +572,7 @@ export const getDashboardStats = async (req, res) => {
       error: error.message,
     });
   }
-};
+};;
 
 export const getPassHistory = async (req, res) => {
   try {
