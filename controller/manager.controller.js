@@ -414,7 +414,6 @@ export const confirmAndConsumeTicket = async (req, res) => {
     const { ticket_id } = req.body;
     const managerId = req.manager._id;
 
-    // Validation
     if (!ticket_id) {
       return sendResponse({
         res,
@@ -423,33 +422,32 @@ export const confirmAndConsumeTicket = async (req, res) => {
       });
     }
 
-    // Find ticket by ticket_id
-    const ticket = await ticketModel.findOne({ ticket_id });
+    // Atomic update - prevents double scan
+    const ticket = await ticketModel.findOneAndUpdate(
+      {
+        ticket_id,
+        ticket_status: { $ne: "consumed" },
+      },
+      {
+        $set: {
+          ticket_status: "consumed",
+          entry_scanned_at: new Date(),
+          scanned_by: managerId,
+        },
+      },
+      {
+        new: true,
+      },
+    );
 
     if (!ticket) {
       return sendResponse({
         res,
-        statusCode: 404,
-        error: "❌ Ticket not found",
-      });
-    }
-
-    // Double check if already consumed
-    if (ticket.ticket_status === "consumed") {
-      return sendResponse({
-        res,
         statusCode: 400,
-        error: "❌ Ticket already consumed. Entry not allowed.",
+        error: "❌ Ticket already consumed or not found",
       });
     }
 
-    // Update ticket status to consumed
-    ticket.ticket_status = "consumed";
-    ticket.entry_scanned_at = new Date();
-    ticket.scanned_by = managerId;
-    await ticket.save();
-
-    // Get user details for confirmation
     const user = await userModel.findById(ticket.user_id);
 
     return sendResponse({
@@ -466,11 +464,12 @@ export const confirmAndConsumeTicket = async (req, res) => {
           ticket_id: ticket.ticket_id,
           ticket_status: ticket.ticket_status,
           entry_scanned_at: ticket.entry_scanned_at,
+          scanned_by: managerId,
         },
       },
     });
   } catch (error) {
-    sendResponse({
+    return sendResponse({
       res,
       statusCode: 500,
       message: "Failed to confirm entry",
