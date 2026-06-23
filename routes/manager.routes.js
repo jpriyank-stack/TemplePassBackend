@@ -7,6 +7,7 @@ import {
   checkToken,
   verifyTicket,
   confirmAndConsumeTicket,
+  getDashboardStats,
 } from "../controller/manager.controller.js";
 
 import { protectManager } from "../middlewares/managerAuth.js";
@@ -20,5 +21,6 @@ router.post("/generate-user-ticket", protectManager, generateTicket);
 router.get("/ticket/qrcode/:ticket_id", protectManager, getTicketQRCode);
 router.post('/verify-ticket', protectManager, verifyTicket);
 router.post('/confirm-entry', protectManager, confirmAndConsumeTicket);
+router.get('/dashboard-stats', protectManager, getDashboardStats);
 
 export default router;

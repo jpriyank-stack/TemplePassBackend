@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import path from "path";
+import dayjs from 'dayjs';
 import {
   managerModel,
   userModel,
@@ -473,6 +474,101 @@ export const confirmAndConsumeTicket = async (req, res) => {
       res,
       statusCode: 500,
       message: "Failed to confirm entry",
+      error: error.message,
+    });
+  }
+};
+
+export const getDashboardStats = async (req, res) => {
+  try {
+    const managerId = req.manager._id;
+    
+    // Get today's date range using dayjs
+    const today = dayjs().startOf('day').toDate();
+    const tomorrow = dayjs().add(1, 'day').startOf('day').toDate();
+
+    // Get all tickets created by this manager today
+    const todayTickets = await ticketModel.find({
+      manager_id: managerId,
+      createdAt: { $gte: today, $lt: tomorrow },
+    });
+
+    // Calculate stats
+    const totalGenerated = todayTickets.length;
+    const totalConsumed = todayTickets.filter(
+      (t) => t.ticket_status === "consumed"
+    ).length;
+    const totalPending = todayTickets.filter(
+      (t) => t.ticket_status === "booked"
+    ).length;
+    const totalCancelled = todayTickets.filter(
+      (t) => t.ticket_status === "cancelled"
+    ).length;
+
+    // Calculate revenue (only from completed payments)
+    const totalRevenue = todayTickets
+      .filter((t) => t.payment_status === "completed")
+      .reduce((sum, ticket) => sum + ticket.amount, 0);
+
+    // Calculate cash and online breakdown
+    const cashTickets = todayTickets.filter(
+      (t) => t.payment_mode === "cash" && t.payment_status === "completed"
+    ).length;
+    const onlineTickets = todayTickets.filter(
+      (t) => t.payment_mode === "online" && t.payment_status === "completed"
+    ).length;
+
+    // Calculate revenue breakdown
+    const cashRevenue = todayTickets
+      .filter((t) => t.payment_mode === "cash" && t.payment_status === "completed")
+      .reduce((sum, ticket) => sum + ticket.amount, 0);
+    const onlineRevenue = todayTickets
+      .filter((t) => t.payment_mode === "online" && t.payment_status === "completed")
+      .reduce((sum, ticket) => sum + ticket.amount, 0);
+
+    // Get current date and time using dayjs
+    const currentDate = dayjs().format('DD MMMM YYYY');
+    const currentTime = dayjs().format('HH:mm:ss');
+
+    return sendResponse({
+      res,
+      statusCode: 200,
+      message: "Dashboard stats retrieved successfully",
+      data: {
+        dateTime: {
+          date: currentDate,
+          time: currentTime,
+        },
+        summary: {
+          totalGenerated,
+          totalConsumed,
+          totalPending,
+          totalCancelled,
+          totalRevenue,
+        },
+        paymentBreakdown: {
+          cash: {
+            tickets: cashTickets,
+            revenue: cashRevenue,
+          },
+          online: {
+            tickets: onlineTickets,
+            revenue: onlineRevenue,
+          },
+        },
+        conversion: {
+          conversionRate:
+            totalGenerated > 0
+              ? ((totalConsumed / totalGenerated) * 100).toFixed(2) + "%"
+              : "0%",
+        },
+      },
+    });
+  } catch (error) {
+    sendResponse({
+      res,
+      statusCode: 500,
+      message: "Failed to fetch dashboard stats",
       error: error.message,
     });
   }
